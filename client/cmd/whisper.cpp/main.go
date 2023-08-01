@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -33,7 +34,7 @@ func main() {
 		logr.SetLevel(slog.LevelDebug)
 	}
 
-	openAiToken := os.Getenv("OPENAI_TOKEN")
+	openAiToken := "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"
 	if openAiToken == "" {
 		logger.Fatal(nil, "openai token required please set the OPENAI_TOKEN environment variable")
 	}
@@ -57,6 +58,7 @@ func main() {
 	}
 
 	transcriptionStream := make(chan stt.Document, 100)
+	botTranscriptionStream := make(chan ttt.Document, 100)
 
 	synthesizer, err := shttp.New("http://localhost:8000/synthesize")
 	if err != nil {
@@ -79,11 +81,12 @@ func main() {
 	})
 
 	sc, err := client.NewSaturdayClient(client.SaturdayConfig{
-		Room:                room,
-		Url:                 url,
-		SttEngine:           sttEngine,
-		TtsEngine:           ttsEngine,
-		TranscriptionStream: transcriptionStream,
+		Room:                   room,
+		Url:                    url,
+		SttEngine:              sttEngine,
+		TtsEngine:              ttsEngine,
+		TranscriptionStream:    transcriptionStream,
+		BotTranscriptionStream: botTranscriptionStream,
 	})
 	if err != nil {
 		logger.Fatal(err, "error creating saturday client")
@@ -95,6 +98,10 @@ func main() {
 	}
 
 	onTextChunk := func(chunk ttt.TextChunk) {
+		fmt.Println("================================================", chunk.Text)
+		botTranscriptionStream <- ttt.Document{
+			NewText: chunk.Text,
+		}
 		err = ttsEngine.Generate(chunk.Text)
 		if err != nil {
 			logger.Error(err, "error generating speech")
@@ -121,6 +128,7 @@ func main() {
 
 	onDocumentUpdate := func(document stt.Document) {
 		transcriptionStream <- document
+		fmt.Println("onDocumentUpdate==========================")
 		promptBuilder.UpdatePrompt(document.NewText)
 	}
 
@@ -166,6 +174,7 @@ func NewPromptBuilder(interval time.Duration, engine *ttt.Engine, pauseFunc func
 
 // update the prompt and reset the timer
 func (p *PromptBuilder) UpdatePrompt(prompt string) {
+	fmt.Println("update prompt: ", prompt)
 	logger.Infof("UPDATING LLM PROMPT %s", prompt)
 	p.Lock()
 	defer p.Unlock()
@@ -197,6 +206,7 @@ func (p *PromptBuilder) Start() {
 }
 
 func (p *PromptBuilder) tryCallEngine() {
+	fmt.Println("----------------------tryCallEngine")
 	p.Lock()
 
 	// no prompt so wait again
@@ -212,7 +222,11 @@ func (p *PromptBuilder) tryCallEngine() {
 	// pause TTS inference so we dont interrupt the tts
 	p.pauseFunc()
 	// run inference
+	fmt.Println("----------------------tryCallEngine", currentPrompt)
+
 	err := p.tttEngine.Generate(currentPrompt)
+	fmt.Println("----------------------tryCallEngine", err)
+
 	if err != nil {
 		logger.Error(err, "error calling tttEngine")
 		// unpause TTS inference so we dont interrupt the tts

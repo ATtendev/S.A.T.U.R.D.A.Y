@@ -6,6 +6,12 @@ type Document struct {
 	CurrentTranscription string
 }
 
+type ResponseDocument struct {
+	Owner                string
+	NewText              string
+	CurrentTranscription string
+}
+
 type DocumentComposer struct {
 	transcriptions []*Transcription
 	finishedText   string

@@ -1,10 +1,24 @@
 package engine
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 type EngineParams struct {
 	OnTextChunk func(TextChunk)
 	Generator   Generator
+}
+
+type Document struct {
+	NewText              string
+	CurrentTranscription string
+}
+
+type ResponseGenerated struct {
+	Owner                string
+	NewText              string
+	CurrentTranscription string
 }
 
 type Engine struct {
@@ -33,7 +47,8 @@ func (e *Engine) Generate(prompt string) error {
 	if err != nil {
 		return err
 	}
-
+	fmt.Println("===============> Any Generate", chunk.Text)
+	// chunk := TextChunk{Text: "Hello, world!"}
 	if e.onTextChunk != nil {
 		e.onTextChunk(chunk)
 	}

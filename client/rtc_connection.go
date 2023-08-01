@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/GRVYDEV/S.A.T.U.R.D.A.Y/stt/engine"
+	ttt "github.com/GRVYDEV/S.A.T.U.R.D.A.Y/ttt/engine"
 
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
@@ -23,10 +24,11 @@ type RTCConnection struct {
 }
 
 type RTCConnectionParams struct {
-	trickleFn           func(*webrtc.ICECandidate, int) error
-	rtpChan             chan<- *rtp.Packet
-	transcriptionStream <-chan engine.Document
-	mediaIn             <-chan media.Sample
+	trickleFn              func(*webrtc.ICECandidate, int) error
+	rtpChan                chan<- *rtp.Packet
+	transcriptionStream    <-chan engine.Document
+	botTranscriptionStream <-chan ttt.Document
+	mediaIn                <-chan media.Sample
 }
 
 // FIXME if transcriptionStream AND mediaIn are not provided this will blow up
@@ -84,7 +86,7 @@ func NewRTCConnection(params RTCConnectionParams) (*RTCConnection, error) {
 		Logger.Info("mediaIn not provided... audio relay is disabled")
 	}
 
-	if params.transcriptionStream != nil {
+	if params.transcriptionStream != nil && params.botTranscriptionStream != nil {
 		ordered := true
 		maxRetransmits := uint16(0)
 
@@ -101,17 +103,41 @@ func NewRTCConnection(params RTCConnectionParams) (*RTCConnection, error) {
 		dc.OnOpen(func() {
 			Logger.Info("data channel opened...")
 
-			for transcription := range params.transcriptionStream {
-				Logger.Debugf("Transcribed %s", transcription.TranscribedText)
-				Logger.Debugf("New text %s", transcription.NewText)
-				data, err := json.Marshal(transcription)
-				if err != nil {
-					Logger.Error(err, "error marshalling transcript")
-					continue
+			go func() {
+				for transcription := range params.transcriptionStream {
+					Logger.Debugf("Transcribed %s", transcription.TranscribedText)
+					Logger.Debugf("New text %s", transcription.NewText)
+					data, err := json.Marshal(&engine.ResponseDocument{
+						Owner:                "you",
+						NewText:              transcription.NewText,
+						CurrentTranscription: transcription.CurrentTranscription,
+					})
+					if err != nil {
+						Logger.Error(err, "error marshalling transcript")
+						continue
+					}
+					Logger.Infof("sending transcript %+v on data channel", transcription)
+					dc.Send(data)
 				}
-				Logger.Infof("sending transcript %+v on data channel", transcription)
-				dc.Send(data)
-			}
+			}()
+
+			go func() {
+				for transcription := range params.botTranscriptionStream {
+					Logger.Debugf("Bot transcribed %s", transcription.CurrentTranscription)
+					Logger.Debugf("Bot generated new text %s", transcription.NewText)
+					data, err := json.Marshal(&engine.ResponseDocument{
+						Owner:                "bot",
+						NewText:              transcription.NewText,
+						CurrentTranscription: transcription.CurrentTranscription,
+					})
+					if err != nil {
+						Logger.Error(err, "error marshalling transcript")
+						continue
+					}
+					Logger.Infof("sending transcript %+v on data channel", transcription)
+					dc.Send(data)
+				}
+			}()
 		})
 
 	} else {

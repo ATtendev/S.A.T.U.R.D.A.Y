@@ -7,6 +7,7 @@ import (
 	logr "github.com/GRVYDEV/S.A.T.U.R.D.A.Y/log"
 	stt "github.com/GRVYDEV/S.A.T.U.R.D.A.Y/stt/engine"
 	tts "github.com/GRVYDEV/S.A.T.U.R.D.A.Y/tts/engine"
+	ttt "github.com/GRVYDEV/S.A.T.U.R.D.A.Y/ttt/engine"
 
 	"github.com/pion/webrtc/v3"
 )
@@ -26,6 +27,8 @@ type SaturdayConfig struct {
 	// channel used to send transcription segments over the data channel
 	// any transcription segment sent on this channel with be sent over the data channel
 	TranscriptionStream chan stt.Document
+
+	BotTranscriptionStream chan ttt.Document
 }
 
 type SaturdayClient struct {
@@ -51,9 +54,10 @@ func NewSaturdayClient(config SaturdayConfig) (*SaturdayClient, error) {
 		trickleFn: func(candidate *webrtc.ICECandidate, target int) error {
 			return ws.SendTrickle(candidate, target)
 		},
-		rtpChan:             ae.RtpIn(),
-		transcriptionStream: config.TranscriptionStream,
-		mediaIn:             ae.MediaOut(),
+		rtpChan:                ae.RtpIn(),
+		transcriptionStream:    config.TranscriptionStream,
+		botTranscriptionStream: config.BotTranscriptionStream,
+		mediaIn:                ae.MediaOut(),
 	})
 	if err != nil {
 		return nil, err
