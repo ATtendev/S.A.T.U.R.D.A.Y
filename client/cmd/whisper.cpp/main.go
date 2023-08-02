@@ -34,7 +34,7 @@ func main() {
 		logr.SetLevel(slog.LevelDebug)
 	}
 
-	openAiToken := "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"
+	openAiToken := os.Getenv("OPENAI-TOKEN")
 	if openAiToken == "" {
 		logger.Fatal(nil, "openai token required please set the OPENAI_TOKEN environment variable")
 	}
